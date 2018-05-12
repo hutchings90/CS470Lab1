@@ -6,18 +6,13 @@ class Household:
         self.priors = [1 / 3] * 3
 
     def chooseTap(self):
-        bestI = 0
-        bestP = self.priors[bestI]
-        for i in range(len(self.priors)):
-            prior = self.priors[i]
-            if prior > bestP:
-                bestI = i
-                bestP = prior
-            elif prior == bestP:
-                if random.randint(0, 1) == 0:
-                    bestI = i
-                    bestP = prior
-        return bestI
+        bestP = max(self.priors)
+        bestIndices = []
+        for i in range(3):
+            if self.priors[i] == bestP:
+                bestIndices.append(i)
+        random.shuffle(bestIndices)
+        return bestIndices[random.randint(0, len(bestIndices) - 1)]
 
     def __str__(self):
         string = 'id:\n\t' + str(self.id) + '\npriors:\n'
@@ -104,7 +99,7 @@ class CapeTown:
 
     def reset(self):
         self.taps = [0] * 3
-        for i in range(len(self.taps)):
+        for i in range(3):
             self.taps[i] = Tap(i)
         self.taps[0].isAvailable = True
 
@@ -116,7 +111,7 @@ class CapeTown:
 
     def __str__(self):
         string = 'SEQUENTIAL KNOWLEDGE (' + str(len(self.sequentialKnowledge)) + '):\n\t' + str(self.sequentialKnowledge) + '\n'
-        string += 'TAPS (' + str(len(self.taps)) + '):\n'
+        string += 'TAPS (' + str(3) + '):\n'
         for tap in self.taps:
             string += str(tap) + '\n'
         string += 'HOUSEHOLDS (' + str(len(self.households)) + '):\n'
