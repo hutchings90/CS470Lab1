@@ -28,58 +28,126 @@ class Tap:
         self.id = i
         self.isAvailable = False
         self.visitors = []
+        self.utilityVisitors = []
 
     def visit(self, visitor):
         self.visitors.append(visitor.id)
         return self.visitors
 
+    def utilityVisit(self, visitor):
+        self.utilityVisitors.append(visitor.id)
+        return self.visitors
+
     def __str__(self):
         string = 'id:\n\t' + str(self.id) + '\n'
         string += 'isAvailable:\n\t' + str(self.isAvailable) + '\n'
-        string += 'visitors (' + str(len(self.visitors)) + '):\n\t' + str(self.visitors)
+        string += 'visitors (' + str(len(self.visitors)) + '):\n\t' + str(self.visitors) + '\n'
+        string += 'utilityVisitors (' + str(len(self.utilityVisitors)) + '):\n\t' + str(self.utilityVisitors)
         return string
 
 class CapeTown:
+    likelihoodOptions = [
+        [[1 / 3, 1 / 3, 1 / 3], [1 / 3, 1 / 3, 1 / 3], [1 / 3, 1 / 3, 1 / 3]],
+        # [[, , ], [, , ], [, , ]],
+        [[10.2 / 36.2, 8.6 / 36.2, 17.4 / 36.2], [17.4 / 36.2, 10.2 / 36.2, 8.6 / 36.2], [8.6 / 36.2, 17.4 / 36.2, 10.2 / 36.2]],
+        [[17.4 / 36.2, 10.2 / 36.2, 8.6 / 36.2], [8.6 / 36.2, 17.4 / 36.2, 10.2 / 36.2], [10.2 / 36.2, 8.6 / 36.2, 17.4 / 36.2]],
+        [[8.6 / 36.2, 17.4 / 36.2, 10.2 / 36.2], [10.2 / 36.2, 8.6 / 36.2, 17.4 / 36.2],[17.4 / 36.2, 10.2 / 36.2, 8.6 / 36.2]]
+    ]
+    utilities = [[100, -70, -70], [-70, 100, -70], [-70, -70, 100]]
+
+    numAgentOptions = [.5, .15, .25, .35, .45]
+    accuracyOptions = ['fixed', 'accurate', 'inaccurate', 'random']
+    boundOptions = [.05, .1, .15, .2]
+
     def __init__(self):
-        self.reset()
+        self.run()
+        self.cascadeAndUtilityRun()
 
-    def run(self, accuracy, bound):
-        self.reset()
-        self.setPriors(accuracy, bound)
-        for household in self.households:
-            self.chooseTap(household)
-        string = ''
-        for i in range(len(self.taps)):
-            string += '\t' + str(i) + '\t' + str(len(self.taps[i].visitors)) + '\n'
-        return string
+    def run(self):
+        print('Run')
+        for accuracy in CapeTown.accuracyOptions:
+            for bound in CapeTown.boundOptions:
+                self.reset(CapeTown.likelihoodOptions[0])
+                lowerBound = int(len(self.households) * .55)
+                upperBound = int(len(self.households) * .85)
+                numAgents = random.randint(lowerBound, upperBound)
+                self.setPriors(accuracy, bound, numAgents)
+                for household in self.households:
+                    self.chooseTap(household)
+                print('\t(' + str(accuracy) + ', ' + str(bound) + ')')
+                for i in range(len(self.taps)):
+                    print('\t\t' + str(i) + ':\t' + str(len(self.taps[i].visitors)))
+        print('Done\n')
 
-    def cascadeRun(self):
-        pass
+    def cascadeAndUtilityRun(self):
+        print('Cascade Run')
+        for likelihoods in CapeTown.likelihoodOptions:
+            for numAgents in CapeTown.numAgentOptions:
+                for accuracy in CapeTown.accuracyOptions:
+                    for bound in CapeTown.boundOptions:
+                        print(likelihoods, numAgents, accuracy, bound)
+                        self.reset(likelihoods)
+                        self.setPriors(accuracy, bound, int(numAgents * len(self.households)))
+                        self.chooseTap(self.households[0])
+                        self.chooseTapUtility(self.households[0])
+                        tapChosen = self.sequentialKnowledge[0]
+                        for i in range(1, len(self.households)):
+                            self.calculatePosterior(i,tapChosen)
+                            self.chooseTap(self.households[i])
+                            self.chooseTapUtility(self.households[i])
+                            tapChosen= self.sequentialKnowledge[i]
+                    for i in range(len(self.taps)):
+                        print('\t\tTap', i)
+                        print('\t\t\tvisitors:\t' + str(len(self.taps[i].visitors)))
+                        print('\t\t\tutility visitors:\t' + str(len(self.taps[i].utilityVisitors)))
+        print('Done\n')
 
-    def setPriors(self, accuracy, bound):
-        if accuracy == 1:
-            self.accuratePriors(bound)
-        elif accuracy == 2:
-            self.inaccuratePriors(bound)
-        elif accuracy == 3:
+    def calculatePosterior(self,count, tapChosen):
+        for x in range(count, len(self.households)):
+            sum = 0
+            postProb= [0]*3
+            for i in range(3):  # i is index for working tap number
+                pos = self.likelihoods[tapChosen][i]
+                postProb[i] = self.households[x].priors[i] * pos
+                sum += postProb[i]
+            alpha = 1 / sum
+            for j in range(3):
+                self.households[x].priors[j] = postProb[j]*alpha
+
+    def chooseTapUtility(self, household):
+        utilityValues = [0] * 3
+        for i in range(3):
+            for j in range(3):
+                utilityValues[i] += self.utilities[i][j] * household.priors[j]
+        bestUtility = max(utilityValues)
+        bestUtilityIndices = []
+        for i in range(3):
+            if (utilityValues[i]== bestUtility):
+                bestUtilityIndices.append(i)
+        self.visitTapUtility(bestUtilityIndices[random.randint(0, len(bestUtilityIndices) - 1)], household)
+
+    def setPriors(self, accuracy, bound, numAgents):
+        if accuracy == 'accurate':
+            self.accuratePriors(bound, numAgents)
+        elif accuracy == 'inaccurate':
+            self.inaccuratePriors(bound, numAgents)
+        elif accuracy == 'random':
             self.randomPriors()
 
-    def accuratePriors(self, bound):
+    def accuratePriors(self, bound, stop):
         inc = random.uniform(.01, bound)
-        stop = random.randint(int(len(self.households) * .55), int(len(self.households) * .85))
         for i in range(stop):
             household = self.households[i]
             household.priors[0] += inc
-            household.priors[1] -= random.uniform(0, inc / 2)
+            household.priors[1] -= random.uniform(0,inc)
             household.priors[2] = 1 - household.priors[0] - household.priors[1]
 
-    def inaccuratePriors(self, bound):
+    def inaccuratePriors(self, bound, stop):
         inc = random.uniform(.01, bound)
-        stop = random.randint(int(len(self.households) * .55), int(len(self.households) * .85))
         for i in range(stop):
             household = self.households[i]
             household.priors[0] -= inc
-            household.priors[1] += random.uniform(0, inc / 2)
+            household.priors[1] += random.uniform(0, inc)
             household.priors[2] = 1 - household.priors[0] - household.priors[1]
 
     def randomPriors(self):
@@ -97,9 +165,15 @@ class CapeTown:
         self.sequentialKnowledge.append(chosenTap)
         self.taps[chosenTap].visit(household)
 
-    def reset(self):
+    def visitTapUtility(self, chosenTap, household):
+        self.sequentialKnowledge.append(chosenTap)
+        self.taps[chosenTap].utilityVisit(household)
+
+    def reset(self, likelihoods):
+        self.likelihoods = likelihoods
+
         self.taps = [0] * 3
-        for i in range(3):
+        for i in range(len(self.taps)):
             self.taps[i] = Tap(i)
         self.taps[0].isAvailable = True
 
@@ -111,7 +185,7 @@ class CapeTown:
 
     def __str__(self):
         string = 'SEQUENTIAL KNOWLEDGE (' + str(len(self.sequentialKnowledge)) + '):\n\t' + str(self.sequentialKnowledge) + '\n'
-        string += 'TAPS (' + str(3) + '):\n'
+        string += 'TAPS (' + str(len(self.taps)) + '):\n'
         for tap in self.taps:
             string += str(tap) + '\n'
         string += 'HOUSEHOLDS (' + str(len(self.households)) + '):\n'
@@ -120,24 +194,3 @@ class CapeTown:
         return string
 
 capeTown = CapeTown()
-r = range(5)
-print('-- FIXED --------------------------------------------------------------------')
-for i in r:
-    print(str(i) + capeTown.run(None, None))
-    print()
-
-print('-- ACCURATE -----------------------------------------------------------------')
-for i in r:
-    print(str(i) + capeTown.run(1, .1))
-    print()
-
-print('-- INACCURATE ---------------------------------------------------------------')
-for i in r:
-    print(str(i) + capeTown.run(2, .1))
-    print()
-
-print('-- RANDOM -------------------------------------------------------------------')
-for i in r:
-    print(str(i) + capeTown.run(3, None))
-    print()
-
