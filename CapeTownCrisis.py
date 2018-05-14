@@ -1,3 +1,5 @@
+import sys
+import csv
 import random
 
 class Household:
@@ -59,25 +61,38 @@ class CapeTown:
     accuracyOptions = ['fixed', 'accurate', 'inaccurate', 'random']
     boundOptions = [.05, .1, .15, .2]
 
-    def __init__(self):
-        self.run()
-        self.cascadeAndUtilityRun()
+    def __init__(self, run):
+        if run % 2 == 1:
+            self.run()
+        if run > 1:
+            self.cascadeAndUtilityRun()
 
     def run(self):
-        print('Run')
-        for accuracy in CapeTown.accuracyOptions:
-            for bound in CapeTown.boundOptions:
-                self.reset(CapeTown.likelihoodOptions[0])
-                lowerBound = int(len(self.households) * .55)
-                upperBound = int(len(self.households) * .85)
-                numAgents = random.randint(lowerBound, upperBound)
-                self.setPriors(accuracy, bound, numAgents)
-                for household in self.households:
-                    self.chooseTap(household)
-                print('\t(' + str(accuracy) + ', ' + str(bound) + ')')
-                for i in range(len(self.taps)):
-                    print('\t\t' + str(i) + ':\t' + str(len(self.taps[i].visitors)))
-        print('Done\n')
+        with open('output1.csv', 'w+') as csvfile:
+            writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            for accuracy in CapeTown.accuracyOptions:
+                writer.writerow(accuracy)
+                for a in range(5):
+                    for bound in CapeTown.boundOptions:
+                        totals = [0] * 3
+                        writer.writerow('Bound,' + str(bound))
+                        writer.writerow('Tap,#Visitors')
+                        for b in range(5):
+                            self.reset(CapeTown.likelihoodOptions[0])
+                            lowerBound = int(len(self.households) * .55)
+                            upperBound = int(len(self.households) * .85)
+                            numAgents = random.randint(lowerBound, upperBound)
+                            self.setPriors(accuracy, bound, numAgents)
+                            for household in self.households:
+                                self.chooseTap(household)
+                            for tap in self.taps:
+                                writer.writerow(str(tap.id) + ',' + str(len(tap.visitors)))
+                                totals[tap.id] += len(tap.visitors)
+                        writer.writerow('Totals')
+                        writer.writerow('Tap,%Households')
+                        total = len(self.households) * len(CapeTown.boundOptions)
+                        for i in range(len(totals)):
+                            writer.writerow(str(i) + ',' + str(totals[i] / total))
 
     def cascadeAndUtilityRun(self):
         print('Cascade Run')
@@ -193,4 +208,5 @@ class CapeTown:
             string += str(household) + '\n'
         return string
 
-capeTown = CapeTown()
+capeTown = CapeTown(int(sys.argv[1]))
+
