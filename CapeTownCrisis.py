@@ -50,16 +50,13 @@ class Tap:
 class CapeTown:
     likelihoodOptions = [
         [[1 / 3, 1 / 3, 1 / 3], [1 / 3, 1 / 3, 1 / 3], [1 / 3, 1 / 3, 1 / 3]],
-        # [[, , ], [, , ], [, , ]],
-        [[10.2 / 36.2, 8.6 / 36.2, 17.4 / 36.2], [17.4 / 36.2, 10.2 / 36.2, 8.6 / 36.2], [8.6 / 36.2, 17.4 / 36.2, 10.2 / 36.2]],
-        [[17.4 / 36.2, 10.2 / 36.2, 8.6 / 36.2], [8.6 / 36.2, 17.4 / 36.2, 10.2 / 36.2], [10.2 / 36.2, 8.6 / 36.2, 17.4 / 36.2]],
-        [[8.6 / 36.2, 17.4 / 36.2, 10.2 / 36.2], [10.2 / 36.2, 8.6 / 36.2, 17.4 / 36.2],[17.4 / 36.2, 10.2 / 36.2, 8.6 / 36.2]]
+        [[1 / 2, 1 / 4, 1 / 4], [1 / 4, 1 / 2, 1 / 4], [1 / 4, 1 / 4, 1 / 2]],
+        [[1 / 4, 1 / 2, 1 / 4], [1 / 4, 1 / 4, 1 / 2], [1 / 2, 1 / 4, 1 / 4]],
     ]
     utilities = [[100, -70, -70], [-70, 100, -70], [-70, -70, 100]]
-
-    numAgentOptions = [.5, .15, .25, .35, .45]
-    accuracyOptions = ['fixed', 'accurate', 'inaccurate', 'random']
-    boundOptions = [.05, .1, .15, .2]
+    numAgentOptions = [.05, .45]
+    accuracyOptions = ['accurate', 'inaccurate', 'random']
+    boundOptions = [.1]
 
     def __init__(self, run):
         if run % 2 == 1:
@@ -72,50 +69,61 @@ class CapeTown:
             writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
             for accuracy in CapeTown.accuracyOptions:
                 writer.writerow(accuracy)
-                for a in range(5):
-                    for bound in CapeTown.boundOptions:
-                        totals = [0] * 3
-                        writer.writerow('Bound,' + str(bound))
-                        writer.writerow('Tap,#Visitors')
-                        for b in range(5):
-                            self.reset(CapeTown.likelihoodOptions[0])
-                            lowerBound = int(len(self.households) * .55)
-                            upperBound = int(len(self.households) * .85)
-                            numAgents = random.randint(lowerBound, upperBound)
-                            self.setPriors(accuracy, bound, numAgents)
-                            for household in self.households:
-                                self.chooseTap(household)
-                            for tap in self.taps:
-                                writer.writerow(str(tap.id) + ',' + str(len(tap.visitors)))
-                                totals[tap.id] += len(tap.visitors)
-                        writer.writerow('Totals')
-                        writer.writerow('Tap,%Households')
-                        total = len(self.households) * len(CapeTown.boundOptions)
-                        for i in range(len(totals)):
-                            writer.writerow(str(i) + ',' + str(totals[i] / total))
+                for bound in CapeTown.boundOptions:
+                    totals = [0] * 3
+                    total = 0
+                    for b in range(5):
+                        self.reset(CapeTown.likelihoodOptions[0])
+                        lowerBound = int(len(self.households) * .55)
+                        upperBound = int(len(self.households) * .85)
+                        numAgents = random.randint(lowerBound, upperBound)
+                        self.setPriors(accuracy, bound, numAgents)
+                        for household in self.households:
+                            self.chooseTap(household)
+                        for tap in self.taps:
+                            totals[tap.id] += len(tap.visitors)
+                        total += len(self.households)
+                    writer.writerow('Tap,#Visitors,#Households,Visitors/Households')
+                    for i in range(len(totals)):
+                        visitorCount = totals[i]
+                        writer.writerow(str(i) + ',' + str(visitorCount) + ',' + str(total) + ',' + str((visitorCount / total) * 100))
 
     def cascadeAndUtilityRun(self):
-        print('Cascade Run')
-        for likelihoods in CapeTown.likelihoodOptions:
-            for numAgents in CapeTown.numAgentOptions:
-                for accuracy in CapeTown.accuracyOptions:
-                    for bound in CapeTown.boundOptions:
-                        print(likelihoods, numAgents, accuracy, bound)
-                        self.reset(likelihoods)
-                        self.setPriors(accuracy, bound, int(numAgents * len(self.households)))
-                        self.chooseTap(self.households[0])
-                        self.chooseTapUtility(self.households[0])
-                        tapChosen = self.sequentialKnowledge[0]
-                        for i in range(1, len(self.households)):
-                            self.calculatePosterior(i,tapChosen)
-                            self.chooseTap(self.households[i])
-                            self.chooseTapUtility(self.households[i])
-                            tapChosen= self.sequentialKnowledge[i]
-                    for i in range(len(self.taps)):
-                        print('\t\tTap', i)
-                        print('\t\t\tvisitors:\t' + str(len(self.taps[i].visitors)))
-                        print('\t\t\tutility visitors:\t' + str(len(self.taps[i].utilityVisitors)))
-        print('Done\n')
+        with open('output2.csv', 'w+') as csvfile:
+            writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            for likelihoods in CapeTown.likelihoodOptions:
+                writer.writerow('likelihoods:,' + str(likelihoods))
+                for numAgents in CapeTown.numAgentOptions:
+                    writer.writerow('numAgents:,' + str(numAgents))
+                    for accuracy in CapeTown.accuracyOptions:
+                        writer.writerow(accuracy)
+                        for bound in CapeTown.boundOptions:
+                            totals = [0] * 3
+                            utilityTotals = [0] * 3
+                            total = 0
+                            for b in range(5):
+                                self.reset(likelihoods)
+                                self.setPriors(accuracy, bound, int(numAgents * len(self.households)))
+                                self.chooseTap(self.households[0])
+                                self.chooseTapUtility(self.households[0])
+                                tapChosen = self.sequentialKnowledge[0]
+                                for i in range(1, len(self.households)):
+                                    self.calculatePosterior(i,tapChosen)
+                                    self.chooseTap(self.households[i])
+                                    self.chooseTapUtility(self.households[i])
+                                    tapChosen= self.sequentialKnowledge[i]
+                                for tap in self.taps:
+                                    totals[tap.id] += len(tap.visitors)
+                                    utilityTotals[tap.id] += len(tap.utilityVisitors)
+                                total += len(self.households)
+                            writer.writerow('Tap,#Visitors,#Households,%Visitors')
+                            for i in range(len(totals)):
+                                visitorCount = totals[i]
+                                writer.writerow(str(i) + ',' + str(visitorCount) + ',' + str(total) + ',' + str((visitorCount / total) * 100))
+                            writer.writerow('Tap(Utility),#Visitors,#Households,%Visitors')
+                            for i in range(len(totals)):
+                                visitorCount = utilityTotals[i]
+                                writer.writerow(str(i) + ',' + str(visitorCount) + ',' + str(total) + ',' + str((visitorCount / total) * 100))
 
     def calculatePosterior(self,count, tapChosen):
         for x in range(count, len(self.households)):
@@ -167,12 +175,12 @@ class CapeTown:
 
     def randomPriors(self):
         for household in self.households:
-            priors = [0] * 3
-            probability = 1
-            priors[0] = random.uniform(0, probability)
-            probability -= priors[0]
-            priors[1] = random.uniform(0, probability)
-            priors[2] = probability - priors[1]
+            priors = []
+            for i in range(3):
+                priors.append(random.randint(0, 1000))
+            s = sum(priors)
+            for i in range(3):
+                priors[i] = priors[i] / s
             household.priors = priors
 
     def chooseTap(self, household):
